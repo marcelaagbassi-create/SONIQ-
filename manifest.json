@@ -1,0 +1,45 @@
+{
+  "name": "SONIQ — Reconnaissance Musicale",
+  "short_name": "SONIQ",
+  "description": "Identifiez chaque mélodie instantanément grâce à l'empreinte audio réelle.",
+  "start_url": "./soniq.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#eef6fb",
+  "theme_color": "#5bbdd6",
+  "lang": "fr",
+  "categories": ["music", "entertainment", "utilities"],
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Identifier une musique",
+      "short_name": "Écouter",
+      "description": "Lancer immédiatement la reconnaissance musicale",
+      "url": "./soniq.html#listen",
+      "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    }
+  ],
+  "screenshots": [],
+  "related_applications": [],
+  "prefer_related_applications": false
+}
