@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icon.svg">
 <title>SONIQ — Reconnaissance Musicale</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&family=Quicksand:wght@400;500;600;700&family=Bebas+Neue&display=swap" rel="stylesheet">
 <style>
 /* ============================================================
    VARIABLES
@@ -61,6 +61,13 @@
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.8rem;
   transition:opacity 0.5s ease,visibility 0.5s ease;
 }
+/* Brand collée en bas du loader */
+#loader .loader-brand{
+  position:absolute;
+  bottom:2.5rem;
+  left:50%;
+  transform:translateX(-50%);
+}
 [data-theme="dark"] #loader{background:linear-gradient(145deg,#0d1b24,#0a1520);}
 #loader.hidden{opacity:0;visibility:hidden;pointer-events:none;}
 .loader-logo{
@@ -86,6 +93,52 @@
 .loader-dot:nth-child(2){background:#b8aaed;animation-delay:0.2s;}
 .loader-dot:nth-child(3){background:#f5a7c7;animation-delay:0.4s;}
 @keyframes dotBounce{0%,80%,100%{transform:scale(0.6);opacity:0.4;}40%{transform:scale(1.1);opacity:1;}}
+
+/* DAVIESLAY brand */
+.loader-brand{
+  display:flex;align-items:center;justify-content:center;
+  position:relative;overflow:hidden;
+  flex-shrink:0;
+}
+.loader-brand-wrap{
+  position:relative;display:inline-block;line-height:1;padding-bottom:12px;
+}
+.loader-brand-text{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:30px;letter-spacing:4px;
+  /* Bleu corail : entre cyan profond et corail chaud */
+  color:#4da8c4;
+  -webkit-text-stroke:0.5px #1a6080;
+  paint-order:stroke fill;
+  user-select:none;position:relative;z-index:1;
+  text-shadow:0 0 18px rgba(77,168,196,0.35);
+}
+.loader-brand-studio{
+  position:absolute;bottom:0px;right:0;
+  font-family:monospace;font-size:7.5px;letter-spacing:3.5px;
+  color:rgba(77,168,196,0.5);
+  text-transform:lowercase;
+}
+.loader-brand-shine{
+  position:absolute;inset:0;
+  font-family:'Bebas Neue',sans-serif;
+  font-size:30px;letter-spacing:4px;
+  color:transparent;
+  background:linear-gradient(105deg,transparent 20%,rgba(255,255,255,0) 35%,rgba(255,255,255,0.9) 48%,rgba(255,255,255,1) 50%,rgba(255,255,255,0.9) 52%,rgba(255,255,255,0) 65%,transparent 80%);
+  background-size:300% 100%;
+  -webkit-background-clip:text;background-clip:text;
+  animation:brandSweep 3s ease-in-out infinite;
+  animation-delay:1s;
+  z-index:2;pointer-events:none;
+}
+@keyframes brandSweep{
+  0%  {background-position:200% center;opacity:0;}
+  5%  {opacity:1;}
+  50% {background-position:-50% center;opacity:1;}
+  70% {opacity:0;}
+  100%{background-position:-50% center;opacity:0;}
+}
+
 
 /* ============================================================
    SVG ICONS
@@ -340,6 +393,14 @@ kbd{background:rgba(255,255,255,0.7);border:1.5px solid var(--border);padding:1p
     <div class="loader-dot"></div>
     <div class="loader-dot"></div>
     <div class="loader-dot"></div>
+  </div>
+  <!-- DAVIESLAY brand -->
+  <div class="loader-brand">
+    <div class="loader-brand-wrap">
+      <div class="loader-brand-text">DAVIESLAY</div>
+      <div class="loader-brand-shine">DAVIESLAY</div>
+      <span class="loader-brand-studio">studio</span>
+    </div>
   </div>
 </div>
 
