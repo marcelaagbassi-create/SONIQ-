@@ -1068,7 +1068,11 @@ function showSetupStatus(msg, type) {
 // ===== INIT =====
 window.addEventListener('load', () => {
   showSetupStatus('✓ Serveur sécurisé actif', 'ok');
-  try { soniqHistory = JSON.parse(localStorage.getItem('soniq_history') || '[]'); } catch { soniqHistory = []; }
+  try {
+    soniqHistory = JSON.parse(localStorage.getItem('soniq_history') || '[]');
+    // Validation
+    if (!Array.isArray(soniqHistory)) soniqHistory = [];
+  } catch { soniqHistory = []; }
   if (soniqHistory.length) renderHistory();
   loadPlaylist();
   updatePlBadge();
@@ -1282,18 +1286,18 @@ function displayResult(r) {
   // ===== REDIRECTION AUTOMATIQUE VERS LE CATALOGUE =====
   setTimeout(() => {
     const searchQuery = `${r.title} ${r.artist} official audio`;
-    // Pré-charger la recherche dans le catalogue
     catQuery  = searchQuery;
     catToken  = '';
     catItems  = [];
     catLoaded = true;
     document.getElementById('catSearchInput').value = `${r.title} ${r.artist}`;
     document.getElementById('catSectionLabel').textContent = `🎯 "${r.title}"`;
-    // Naviguer vers l'onglet catalogue
     showPage('catalogue');
-    catFetchYT(false);
-    // Toast de notification
-    showToast(`🎯 Recherche de "${r.title}" dans le catalogue…`);
+    showToast(`🎯 Recherche de "${r.title}"…`);
+    catFetchYT(false).then(() => {
+      // Lecture automatique du premier résultat YouTube
+      setTimeout(() => autoPlayFirstResult(), 1200);
+    });
   }, 2200);
 }
 function resetUploadZone() {
@@ -1389,9 +1393,33 @@ function stopPreview() {
 
 // ===== HISTORY =====
 function addToHistory(r, artUrl) {
-  soniqHistory.unshift({ title:r.title, artist:r.artist, artUrl, time:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}), raw:r });
-  if (soniqHistory.length > 8) soniqHistory.pop();
-  try { localStorage.setItem('soniq_history', JSON.stringify(soniqHistory.map(h=>({...h,raw:undefined})))); } catch {}
+  // Supprimer doublon éventuel
+  soniqHistory = soniqHistory.filter(h => !(h.title === r.title && h.artist === r.artist));
+  // Ajouter en tête avec toutes les données
+  soniqHistory.unshift({
+    title:   r.title  || '?',
+    artist:  r.artist || '?',
+    album:   r.album  || '',
+    artUrl:  artUrl   || null,
+    time:    new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),
+    date:    new Date().toLocaleDateString('fr-FR',{day:'2-digit',month:'short'}),
+    raw:     r,
+  });
+  if (soniqHistory.length > 50) soniqHistory = soniqHistory.slice(0, 50);
+  // Sauvegarder AVEC raw pour pouvoir relancer
+  try {
+    localStorage.setItem('soniq_history', JSON.stringify(soniqHistory));
+  } catch(e) {
+    // Si trop gros, sauvegarder sans les données spotify/apple_music
+    try {
+      localStorage.setItem('soniq_history', JSON.stringify(
+        soniqHistory.map(h => ({
+          ...h,
+          raw: h.raw ? { title:h.raw.title, artist:h.raw.artist, album:h.raw.album, release_date:h.raw.release_date, timecode:h.raw.timecode } : null
+        }))
+      ));
+    } catch {}
+  }
   renderHistory();
   // Auto-add to playlist
   addToPlaylist(r, artUrl);
@@ -1576,14 +1604,92 @@ function revealApi() {
 }
 
 function renderHistory() {
-  const s = document.getElementById('historySection'), l = document.getElementById('historyList');
-  s.style.display='block'; l.innerHTML='';
-  soniqHistory.forEach((item,i) => {
+  const section = document.getElementById('historySection');
+  const list    = document.getElementById('historyList');
+  if (!section || !list) return;
+
+  if (!soniqHistory.length) {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = 'block';
+
+  // Header avec bouton vider
+  let header = section.querySelector('.history-header');
+  if (!header) {
+    header = document.createElement('div');
+    header.className = 'history-header';
+    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:0.8rem';
+    header.innerHTML = `
+      <div class="history-title">🕐 Récemment identifiées</div>
+      <button onclick="clearHistory()" style="padding:5px 12px;border-radius:100px;border:1.5px solid var(--border);background:var(--surface);color:var(--muted);font-size:0.68rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.2s" onmouseover="this.style.borderColor='var(--pink)';this.style.color='var(--pink)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+        Effacer
+      </button>`;
+    section.insertBefore(header, list);
+  }
+
+  list.innerHTML = '';
+  soniqHistory.forEach((item, i) => {
     const el = document.createElement('div');
-    el.className='history-item'; el.style.animationDelay=(i*0.05)+'s';
-    el.innerHTML=`<div class="history-art">${item.artUrl?`<img src="${item.artUrl}" onerror="this.parentNode.innerHTML='<svg width=20 height=20 viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'var(--cyan-l)\\' stroke-width=\\'1.5\\'><path d=\\'M9 18V5l12-2v13\\'/><circle cx=\\'6\\' cy=\\'18\\' r=\\'3\\'/><circle cx=\\'18\\' cy=\\'16\\' r=\\'3\\'/></svg>'">`:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan-l)" stroke-width="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>'}</div><div class="history-info"><div class="history-song">${item.title||'?'}</div><div class="history-artist">${item.artist||'?'}</div></div><span class="history-time">${item.time}</span>`;
-    if (item.raw) el.onclick=()=>displayResult(item.raw);
-    l.appendChild(el);
+    el.className = 'history-item';
+    el.style.animationDelay = (i * 0.04) + 's';
+    el.innerHTML = `
+      <div class="history-art">
+        ${item.artUrl
+          ? `<img src="${item.artUrl}" loading="lazy" onerror="this.parentNode.innerHTML='<svg width=20 height=20 viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'var(--cyan-l)\\' stroke-width=\\'1.5\\'><path d=\\'M9 18V5l12-2v13\\'/><circle cx=\\'6\\' cy=\\'18\\' r=\\'3\\'/><circle cx=\\'18\\' cy=\\'16\\' r=\\'3\\'/></svg>'">`
+          : `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan-l)" stroke-width="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`
+        }
+      </div>
+      <div class="history-info" style="cursor:pointer" onclick="historyReplay(${i})">
+        <div class="history-song">${item.title || '?'}</div>
+        <div class="history-artist">${item.artist || '?'}</div>
+        ${item.album ? `<div style="font-size:0.65rem;color:var(--light);margin-top:1px">💿 ${item.album}</div>` : ''}
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+        <span class="history-time">${item.date||''} ${item.time}</span>
+        <button onclick="historyPlayInCatalogue(${i})"
+          style="width:28px;height:28px;border-radius:50%;border:none;background:linear-gradient(135deg,var(--cyan),var(--cyan-d));color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 8px rgba(91,189,214,0.35)">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg>
+        </button>
+      </div>`;
+    list.appendChild(el);
+  });
+}
+
+function clearHistory() {
+  if (!soniqHistory.length) return;
+  if (!confirm('Effacer tout l\'historique ?')) return;
+  soniqHistory = [];
+  localStorage.removeItem('soniq_history');
+  renderHistory();
+}
+
+function historyReplay(idx) {
+  const item = soniqHistory[idx];
+  if (!item) return;
+  if (item.raw) {
+    showPage('home');
+    displayResult(item.raw);
+  } else {
+    historyPlayInCatalogue(idx);
+  }
+}
+
+function historyPlayInCatalogue(idx) {
+  const item = soniqHistory[idx];
+  if (!item) return;
+  const q = `${item.title} ${item.artist} official audio`;
+  catQuery  = q;
+  catToken  = '';
+  catItems  = [];
+  catLoaded = true;
+  document.getElementById('catSearchInput').value = `${item.title} ${item.artist}`;
+  document.getElementById('catSectionLabel').textContent = `▶ "${item.title}"`;
+  showPage('catalogue');
+  catFetchYT(false).then(() => {
+    // Lecture automatique du premier résultat
+    setTimeout(() => autoPlayFirstResult(), 1500);
   });
 }
 
@@ -1603,7 +1709,14 @@ function showMicPermissionCard(){document.getElementById('permCard').classList.a
 function openMicSettings(){const os=detectOs(),ua=navigator.userAgent.toLowerCase();if(os==='android'){const pkg=ua.includes('firefox')?'org.mozilla.firefox':ua.includes('samsung')?'com.sec.android.app.sbrowser':'com.android.chrome';const a=document.createElement('a');a.href=`intent://settings/application_details/#Intent;scheme=android-app;package=${pkg};end`;a.target='_blank';document.body.appendChild(a);a.click();document.body.removeChild(a);}else if(os==='ios'){window.location.href='app-settings:';}else{window.open(ua.includes('firefox')?'about:preferences#privacy':'https://support.google.com/chrome/answer/2693767?hl=fr','_blank');}}
 async function retryMic(){document.getElementById('permCard').classList.remove('show');errorMsg.classList.remove('show');try{const s=await navigator.mediaDevices.getUserMedia({audio:true});s.getTracks().forEach(t=>t.stop());setStatus('✅ Microphone autorisé !','active');statusBadge.innerHTML='<svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="#8adec9"/></svg> Prêt';setTimeout(()=>setStatus('Appuyez pour écouter'),2500);}catch{showMicPermissionCard();}}
 
-// ===== CATALOGUE YOUTUBE =====
+// ===== LECTURE AUTOMATIQUE DU PREMIER RÉSULTAT =====
+function autoPlayFirstResult() {
+  if (!catItems.length) return;
+  const first = catItems[0];
+  if (!first?.videoId) return;
+  showToast(`▶ Lecture automatique : ${first.title}`);
+  catPlayYT(first);
+}
 // Clé YouTube Data API v3 — gratuite, 10 000 req/jour
 // ============================================================
 //  SONIQ — Configuration serveur proxy
@@ -1685,9 +1798,11 @@ async function catFetchYT(append) {
     catRenderItems(items, append);
     loadMore.style.display = catToken ? 'block' : 'none';
     document.getElementById('catResultCount').textContent = catItems.length + ' titres';
+    return items; // ← retourner les items pour .then()
   } catch(e) {
     console.warn('Server/YT error:', e);
     catRenderDemo(catQuery, append);
+    return catItems;
   }
 }
 
