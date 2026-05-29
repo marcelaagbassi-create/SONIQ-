@@ -1,162 +1,116 @@
 // ============================================================
-//  SONIQ — Service Worker
-//  v1.0.0 · DAVIESLAY 💥
+//  SONIQ — Service Worker v1.1.0
+//  DAVIESLAY studio — Background audio support
 // ============================================================
 
-const CACHE_NAME    = 'soniq-v1.0.0';
+const CACHE_NAME    = 'soniq-v1.1.0';
 const FONT_CACHE    = 'soniq-fonts-v1';
 const DYNAMIC_CACHE = 'soniq-dynamic-v1';
 
-// Fichiers à mettre en cache immédiatement à l'installation
 const STATIC_ASSETS = [
-  './soniq.html',
+  './index.html',
   './manifest.json',
   './icon.svg',
   './sw.js',
 ];
 
-// Polices Google Fonts à mettre en cache
-const FONT_ORIGINS = [
-  'https://fonts.googleapis.com',
-  'https://fonts.gstatic.com',
-];
-
-// ============================================================
-//  INSTALL — pré-cache des assets statiques
-// ============================================================
+// ── INSTALL ──────────────────────────────────────────────────
 self.addEventListener('install', event => {
-  console.log('[SW] Installation SONIQ v1.0.0');
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('[SW] Mise en cache des assets statiques');
-        return cache.addAll(STATIC_ASSETS);
-      })
+      .then(cache => cache.addAll(STATIC_ASSETS))
       .then(() => self.skipWaiting())
-      .catch(err => console.warn('[SW] Erreur cache install:', err))
+      .catch(err => console.warn('[SW] Install error:', err))
   );
 });
 
-// ============================================================
-//  ACTIVATE — nettoyage des anciens caches
-// ============================================================
+// ── ACTIVATE ─────────────────────────────────────────────────
 self.addEventListener('activate', event => {
-  console.log('[SW] Activation SONIQ v1.0.0');
   event.waitUntil(
     caches.keys().then(keys =>
       Promise.all(
-        keys
-          .filter(key => key !== CACHE_NAME && key !== FONT_CACHE && key !== DYNAMIC_CACHE)
-          .map(key => {
-            console.log('[SW] Suppression ancien cache:', key);
-            return caches.delete(key);
-          })
+        keys.filter(k => k !== CACHE_NAME && k !== FONT_CACHE && k !== DYNAMIC_CACHE)
+            .map(k => caches.delete(k))
       )
     ).then(() => self.clients.claim())
   );
 });
 
-// ============================================================
-//  FETCH — stratégie de cache intelligente
-// ============================================================
+// ── FETCH ────────────────────────────────────────────────────
 self.addEventListener('fetch', event => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // 1. API AudD → réseau uniquement (pas de cache pour les requêtes audio)
-  if (url.hostname === 'api.audd.io') {
+  // API serveur → réseau uniquement
+  if (url.hostname.includes('onrender.com') || url.hostname === 'api.audd.io') {
     event.respondWith(
       fetch(request).catch(() =>
-        new Response(
-          JSON.stringify({ status: 'error', error: { error_code: 0, error_message: 'Hors ligne — connexion requise pour identifier la musique.' } }),
-          { headers: { 'Content-Type': 'application/json' } }
-        )
+        new Response(JSON.stringify({ status:'error', error:{ error_message:'Hors ligne' } }),
+          { headers:{ 'Content-Type':'application/json' } })
       )
     );
     return;
   }
 
-  // 2. Polices Google → Cache First avec fallback réseau
-  if (FONT_ORIGINS.some(o => request.url.startsWith(o))) {
+  // YouTube → réseau uniquement (streaming)
+  if (url.hostname.includes('youtube.com') || url.hostname.includes('ytimg.com') || url.hostname.includes('googleapis.com')) {
+    event.respondWith(fetch(request).catch(() => new Response('', { status: 503 })));
+    return;
+  }
+
+  // Polices → Cache First
+  if (url.hostname.includes('fonts.googleapis.com') || url.hostname.includes('fonts.gstatic.com')) {
     event.respondWith(
       caches.open(FONT_CACHE).then(cache =>
         cache.match(request).then(cached => {
           if (cached) return cached;
-          return fetch(request).then(response => {
-            cache.put(request, response.clone());
-            return response;
-          });
+          return fetch(request).then(resp => { cache.put(request, resp.clone()); return resp; });
         })
       )
     );
     return;
   }
 
-  // 3. Assets statiques → Cache First
-  if (STATIC_ASSETS.some(a => request.url.includes(a.replace('./', '')))) {
-    event.respondWith(
-      caches.match(request).then(cached => {
-        if (cached) return cached;
-        return fetch(request).then(response => {
-          if (response && response.status === 200) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then(c => c.put(request, clone));
-          }
-          return response;
-        });
-      })
-    );
-    return;
-  }
-
-  // 4. Tout le reste → Network First avec fallback cache
+  // Assets statiques → Cache First
   event.respondWith(
-    fetch(request)
-      .then(response => {
-        if (response && response.status === 200 && request.method === 'GET') {
-          const clone = response.clone();
-          caches.open(DYNAMIC_CACHE).then(c => c.put(request, clone));
+    caches.match(request).then(cached => {
+      if (cached) return cached;
+      return fetch(request).then(resp => {
+        if (resp && resp.status === 200) {
+          const clone = resp.clone();
+          caches.open(CACHE_NAME).then(c => c.put(request, clone));
         }
-        return response;
-      })
-      .catch(() => caches.match(request))
+        return resp;
+      });
+    })
   );
 });
 
-// ============================================================
-//  MESSAGE — communication avec l'app
-// ============================================================
+// ── MESSAGE ───────────────────────────────────────────────────
 self.addEventListener('message', event => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
-  if (event.data && event.data.type === 'GET_VERSION') {
-    event.ports[0].postMessage({ version: '1.0.0', cache: CACHE_NAME });
-  }
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
+  if (event.data?.type === 'KEEP_ALIVE')   event.ports[0]?.postMessage({ alive: true });
+  if (event.data?.type === 'GET_VERSION')  event.ports[0]?.postMessage({ version:'1.1.0', cache:CACHE_NAME });
 });
 
-// ============================================================
-//  PUSH NOTIFICATIONS (prêt pour l'avenir)
-// ============================================================
+// ── PUSH ──────────────────────────────────────────────────────
 self.addEventListener('push', event => {
   if (!event.data) return;
   const data = event.data.json();
   event.waitUntil(
     self.registration.showNotification(data.title || 'SONIQ', {
-      body: data.body || 'Nouvelle activité SONIQ',
-      icon: './icon.svg',
+      body:  data.body || 'Nouvelle activité SONIQ',
+      icon:  './icon.svg',
       badge: './icon.svg',
-      tag: 'soniq-notification',
-      data: data.url || './',
+      tag:   'soniq-notification',
+      data:  data.url || './',
     })
   );
 });
 
 self.addEventListener('notificationclick', event => {
   event.notification.close();
-  event.waitUntil(
-    clients.openWindow(event.notification.data || './')
-  );
+  event.waitUntil(clients.openWindow(event.notification.data || './'));
 });
 
-console.log('[SW] SONIQ Service Worker chargé — DAVIESLAY 💥');
+console.log('[SW] SONIQ v1.1.0 — Background audio ready · DAVIESLAY 💥');

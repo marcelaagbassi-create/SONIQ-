@@ -1278,6 +1278,23 @@ function displayResult(r) {
   setupPreview(r);
   addToHistory(r, artUrl);
   setTimeout(() => { if (!isListening) setStatus('Appuyez pour écouter'); }, 3000);
+
+  // ===== REDIRECTION AUTOMATIQUE VERS LE CATALOGUE =====
+  setTimeout(() => {
+    const searchQuery = `${r.title} ${r.artist} official audio`;
+    // Pré-charger la recherche dans le catalogue
+    catQuery  = searchQuery;
+    catToken  = '';
+    catItems  = [];
+    catLoaded = true;
+    document.getElementById('catSearchInput').value = `${r.title} ${r.artist}`;
+    document.getElementById('catSectionLabel').textContent = `🎯 "${r.title}"`;
+    // Naviguer vers l'onglet catalogue
+    showPage('catalogue');
+    catFetchYT(false);
+    // Toast de notification
+    showToast(`🎯 Recherche de "${r.title}" dans le catalogue…`);
+  }, 2200);
 }
 function resetUploadZone() {
   uploadZone.querySelector('.upload-text').innerHTML = '<strong>Cliquez ou glissez un fichier audio</strong><br>MP3, MP4, WAV, OGG, M4A…';
@@ -1311,21 +1328,54 @@ function setupPreview(r) {
   if (!url) { wrap.classList.remove('show'); return; }
   previewAudio = new Audio(url);
   previewAudio.volume = 0.8;
+  // Permettre la lecture en arrière-plan
+  if ('mediaSession' in navigator) {
+    const artUrl = r.spotify?.album?.images?.[0]?.url || r.apple_music?.artwork?.url?.replace('{w}','300').replace('{h}','300');
+    setupMediaSession(r.title, r.artist, artUrl);
+  }
   document.getElementById('previewTrackName').textContent = `${r.title} — ${r.artist}`;
   document.getElementById('previewSource').textContent = r.spotify?.preview_url ? 'Spotify' : 'Apple Music';
   document.getElementById('previewBar').style.width = '0%';
-  previewAudio.addEventListener('ended', () => { previewPlaying=false; document.getElementById('svgPlay').style.display='block'; document.getElementById('svgPause').style.display='none'; document.getElementById('previewBar').style.width='0%'; cancelAnimationFrame(previewRaf); });
+  previewAudio.addEventListener('play',  () => updateMediaSessionState('playing'));
+  previewAudio.addEventListener('pause', () => updateMediaSessionState('paused'));
+  previewAudio.addEventListener('ended', () => {
+    previewPlaying=false;
+    document.getElementById('svgPlay').style.display='block';
+    document.getElementById('svgPause').style.display='none';
+    document.getElementById('previewBar').style.width='0%';
+    cancelAnimationFrame(previewRaf);
+    updateMediaSessionState('none');
+  });
   wrap.classList.add('show');
 }
 function togglePreview() {
   if (!previewAudio) return;
   if (previewPlaying) {
     previewAudio.pause(); previewPlaying=false;
-    document.getElementById('svgPlay').style.display='block'; document.getElementById('svgPause').style.display='none';
+    document.getElementById('svgPlay').style.display='block';
+    document.getElementById('svgPause').style.display='none';
     cancelAnimationFrame(previewRaf);
+    updateMediaSessionState('paused');
+    clearInterval(window._swKeepAlive);
   } else {
-    previewAudio.play().then(() => { previewPlaying=true; document.getElementById('svgPlay').style.display='none'; document.getElementById('svgPause').style.display='block'; animatePBar(); }).catch(()=>{});
+    previewAudio.play().then(() => {
+      previewPlaying=true;
+      document.getElementById('svgPlay').style.display='none';
+      document.getElementById('svgPause').style.display='block';
+      animatePBar();
+      updateMediaSessionState('playing');
+      swKeepAlive();
+    }).catch(()=>{});
   }
+}
+function swKeepAlive() {
+  clearInterval(window._swKeepAlive);
+  if (!navigator.serviceWorker?.controller) return;
+  window._swKeepAlive = setInterval(() => {
+    if (!previewPlaying) { clearInterval(window._swKeepAlive); return; }
+    const ch = new MessageChannel();
+    navigator.serviceWorker.controller.postMessage({ type:'KEEP_ALIVE' }, [ch.port2]);
+  }, 20000);
 }
 function animatePBar() {
   if (!previewAudio||!previewPlaying) return;
@@ -1756,6 +1806,12 @@ function catPlayYT(item) {
   const existing = document.getElementById('ytPlayerOverlay');
   if (existing) existing.remove();
 
+  // Media Session pour la lecture YT en arrière-plan
+  if ('mediaSession' in navigator) {
+    setupMediaSession(item.title, item.artist, item.thumb);
+  }
+  showToast(`▶ ${item.title} — ${item.artist}`);
+
   const overlay = document.createElement('div');
   overlay.id = 'ytPlayerOverlay';
   overlay.style.cssText = `
@@ -1781,7 +1837,7 @@ function catPlayYT(item) {
     <iframe
       src="https://www.youtube.com/embed/${item.videoId}?autoplay=1&rel=0&modestbranding=1&playsinline=1"
       style="flex:1;width:100%;border:none;display:block"
-      allow="autoplay; fullscreen; accelerometer; gyroscope; picture-in-picture"
+      allow="autoplay; fullscreen; accelerometer; gyroscope; picture-in-picture; background-fetch"
       allowfullscreen
       loading="lazy">
     </iframe>
@@ -1836,7 +1892,78 @@ function catToggleSaveYT(item) {
 
 function catNpClose() {}
 
-// ===== KEYBOARD =====
+// ===== TOAST NOTIFICATION =====
+function showToast(msg, duration=3000) {
+  let toast = document.getElementById('soniqToast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'soniqToast';
+    toast.style.cssText = `
+      position:fixed;bottom:calc(72px + env(safe-area-inset-bottom,0px));
+      left:50%;transform:translateX(-50%) translateY(20px);
+      background:rgba(13,27,36,0.92);color:#c8e8f5;
+      padding:10px 20px;border-radius:100px;font-size:0.78rem;font-weight:600;
+      font-family:'Nunito',sans-serif;white-space:nowrap;
+      box-shadow:0 4px 20px rgba(0,0,0,0.35);
+      border:1px solid rgba(91,189,214,0.2);
+      z-index:9999;opacity:0;transition:all 0.3s cubic-bezier(0.22,1,0.36,1);
+      pointer-events:none;backdrop-filter:blur(12px);
+    `;
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  requestAnimationFrame(() => {
+    toast.style.opacity  = '1';
+    toast.style.transform = 'translateX(-50%) translateY(0)';
+  });
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => {
+    toast.style.opacity   = '0';
+    toast.style.transform = 'translateX(-50%) translateY(10px)';
+  }, duration);
+}
+
+// ===== MEDIA SESSION API (lecture en arrière-plan) =====
+function setupMediaSession(title, artist, artUrl) {
+  if (!('mediaSession' in navigator)) return;
+
+  // Métadonnées affichées sur l'écran de verrouillage / notification
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title:  title  || 'SONIQ',
+    artist: artist || 'Reconnaissance musicale',
+    album:  'SONIQ · DAVIESLAY studio',
+    artwork: artUrl ? [
+      { src: artUrl, sizes: '300x300', type: 'image/jpeg' },
+      { src: artUrl, sizes: '512x512', type: 'image/jpeg' },
+    ] : [
+      { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
+  });
+
+  navigator.mediaSession.setActionHandler('play',  () => {
+    if (previewAudio && previewAudio.paused) { previewAudio.play(); updateMediaSessionState('playing'); }
+    else if (window._catYtAudio && window._catYtAudio.paused) window._catYtAudio.play();
+  });
+  navigator.mediaSession.setActionHandler('pause', () => {
+    if (previewAudio && !previewAudio.paused) { previewAudio.pause(); updateMediaSessionState('paused'); }
+    else if (window._catYtAudio && !window._catYtAudio.paused) window._catYtAudio.pause();
+  });
+  navigator.mediaSession.setActionHandler('stop',  () => {
+    stopPreview();
+    updateMediaSessionState('none');
+  });
+
+  updateMediaSessionState('playing');
+}
+
+function updateMediaSessionState(state) {
+  if (!('mediaSession' in navigator)) return;
+  if (state === 'playing') navigator.mediaSession.playbackState = 'playing';
+  else if (state === 'paused') navigator.mediaSession.playbackState = 'paused';
+  else navigator.mediaSession.playbackState = 'none';
+}
+
+
 document.addEventListener('keydown', e => {
   if (e.code==='Space'&&e.target.tagName!=='INPUT'&&currentMode==='mic') { e.preventDefault(); toggleListen(); }
 });
