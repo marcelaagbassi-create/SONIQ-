@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: soniq-server
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: AUDD_KEY
+        sync: false   # à renseigner manuellement dans le dashboard Render
+      - key: YT_KEY
+        sync: false   # à renseigner manuellement dans le dashboard Render
+      - key: NODE_VERSION
+        value: 20

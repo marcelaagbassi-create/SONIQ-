@@ -1057,26 +1057,17 @@ const statusBadge    = document.getElementById('statusBadge');
 const uploadZone     = document.getElementById('uploadZone');
 
 // ===== API KEY =====
-const DEFAULT_API_KEY = 'd083ec04e4e29be28fba3449aa8b9d69';
-
-function getApiKey() { return localStorage.getItem('audd_api_key') || DEFAULT_API_KEY; }
-function saveApiKey() {
-  const key = document.getElementById('apiKeyInput').value.trim();
-  if (!key) { showSetupStatus('Entrez une clé valide', 'err'); return; }
-  localStorage.setItem('audd_api_key', key);
-  showSetupStatus('✓ Clé sauvegardée !', 'ok');
-}
+// Clés gérées côté serveur Render — aucune clé dans le frontend
+function getApiKey() { return null; } // non utilisé
+function saveApiKey() { showSetupStatus('✓ Clé gérée côté serveur', 'ok'); }
 function showSetupStatus(msg, type) {
   const el = document.getElementById('setupStatus');
-  el.textContent = msg;
-  el.className = 'setup-status ' + type;
+  if (el) { el.textContent = msg; el.className = 'setup-status ' + type; }
 }
 
 // ===== INIT =====
 window.addEventListener('load', () => {
-  const savedKey = localStorage.getItem('audd_api_key');
-  if (savedKey) { document.getElementById('apiKeyInput').value = savedKey; showSetupStatus('✓ Clé chargée', 'ok'); }
-  else if (DEFAULT_API_KEY !== 'test') showSetupStatus('✓ Clé API configurée', 'ok');
+  showSetupStatus('✓ Serveur sécurisé actif', 'ok');
   try { soniqHistory = JSON.parse(localStorage.getItem('soniq_history') || '[]'); } catch { soniqHistory = []; }
   if (soniqHistory.length) renderHistory();
   loadPlaylist();
@@ -1205,12 +1196,15 @@ function handleFile(file) {
 
 // ===== AUDD =====
 async function processAudio(blob) {
-  const fd = new FormData();
-  fd.append('file', blob, 'audio.webm');
-  fd.append('return', 'apple_music,spotify,lyrics');
-  fd.append('api_token', getApiKey());
   try {
-    const res = await fetch('https://api.audd.io/', { method: 'POST', body: fd });
+    // Encoder l'audio en base64 pour l'envoyer au serveur proxy
+    const arrayBuf = await blob.arrayBuffer();
+    const base64   = btoa(String.fromCharCode(...new Uint8Array(arrayBuf)));
+    const res = await fetch(`${SONIQ_SERVER}/api/recognize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ audioBase64: base64, mimeType: blob.type || 'audio/webm' }),
+    });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     handleAuddResult(await res.json());
   } catch {
@@ -1561,7 +1555,11 @@ async function retryMic(){document.getElementById('permCard').classList.remove('
 
 // ===== CATALOGUE YOUTUBE =====
 // Clé YouTube Data API v3 — gratuite, 10 000 req/jour
-const YT_KEY = 'AIzaSyA0xkrCa69u4ta3ipTPzMVp625DWtWdnKQ';
+// ============================================================
+//  SONIQ — Configuration serveur proxy
+//  Les clés API sont sur le serveur Render, jamais ici.
+// ============================================================
+const SONIQ_SERVER = 'https://soniq-server.onrender.com'; // ← URL de ton serveur Render
 
 let catLoaded   = false;
 let catQuery    = '';
@@ -1623,32 +1621,22 @@ async function catFetchYT(append) {
     container.innerHTML = `<div class="cat-loading"><div class="cat-spinner"></div><span>Recherche en cours…</span></div>`;
     loadMore.style.display = 'none';
   }
-  // Si pas de clé API valide → mode démo avec seeds YouTube hardcodés
-  if (!YT_KEY || YT_KEY.includes('placeholder')) {
-    catRenderDemo(catQuery, append);
-    return;
-  }
   try {
-    let url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&maxResults=20&q=${encodeURIComponent(catQuery)}&key=${YT_KEY}`;
-    if (catToken) url += `&pageToken=${catToken}`;
+    let url = `${SONIQ_SERVER}/api/youtube/search?q=${encodeURIComponent(catQuery)}`;
+    if (catToken) url += `&pageToken=${encodeURIComponent(catToken)}`;
     const resp = await fetch(url);
-    if (!resp.ok) throw new Error('YT API ' + resp.status);
+    if (!resp.ok) throw new Error('Server ' + resp.status);
     const data  = await resp.json();
+    if (data.error) throw new Error(data.error);
     catToken    = data.nextPageToken || '';
-    const items = (data.items||[]).map(it => ({
-      videoId:   it.id.videoId,
-      title:     it.snippet.title,
-      artist:    it.snippet.channelTitle.replace(' - Topic','').replace('VEVO',''),
-      thumb:     it.snippet.thumbnails?.medium?.url || it.snippet.thumbnails?.default?.url,
-      published: it.snippet.publishedAt?.slice(0,4),
-    }));
+    const items = data.items || [];
     if (!append) { catItems = items; container.innerHTML = ''; }
     else catItems = catItems.concat(items);
     catRenderItems(items, append);
     loadMore.style.display = catToken ? 'block' : 'none';
     document.getElementById('catResultCount').textContent = catItems.length + ' titres';
   } catch(e) {
-    console.warn('YT API error:', e);
+    console.warn('Server/YT error:', e);
     catRenderDemo(catQuery, append);
   }
 }
@@ -1717,12 +1705,11 @@ function catRenderDemo(query, append) {
   catRenderItems(items, append);
   loadMore.style.display = 'none';
   document.getElementById('catResultCount').textContent = items.length + ' titres';
-  if (!YT_KEY || YT_KEY.includes('placeholder')) {
-    const info = document.createElement('div');
-    info.style.cssText = 'text-align:center;padding:0.8rem 1rem;font-size:0.7rem;color:var(--light);margin-top:0.5rem;line-height:1.6';
-    info.innerHTML = `<strong style="color:var(--cyan-d)">Mode démo</strong> · Ajoute ta clé <a href="https://console.cloud.google.com/" target="_blank" style="color:var(--cyan-d)">YouTube Data API v3</a> pour des résultats illimités`;
-    container.appendChild(info);
-  }
+  // Indicateur mode démo
+  const info = document.createElement('div');
+  info.style.cssText = 'text-align:center;padding:0.8rem 1rem;font-size:0.7rem;color:var(--light);margin-top:0.5rem;line-height:1.6';
+  info.innerHTML = `<strong style="color:var(--cyan-d)">Mode démo</strong> · Serveur temporairement indisponible`;
+  container.appendChild(info);
 }
 
 function catRenderItems(items, append) {
