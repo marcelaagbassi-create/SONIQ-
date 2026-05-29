@@ -829,17 +829,17 @@ kbd{background:rgba(255,255,255,0.7);border:1.5px solid var(--border);padding:1p
 
     <!-- Genres -->
     <div class="cat-genres" id="catGenres">
-      <button class="cat-genre-btn active" onclick="catGenre('',this)">🌍 Tout</button>
-      <button class="cat-genre-btn" onclick="catGenre('afropop',this)">🌍 Afro</button>
-      <button class="cat-genre-btn" onclick="catGenre('hiphop',this)">🎤 Hip-Hop</button>
-      <button class="cat-genre-btn" onclick="catGenre('pop',this)">🎵 Pop</button>
-      <button class="cat-genre-btn" onclick="catGenre('rock',this)">🎸 Rock</button>
-      <button class="cat-genre-btn" onclick="catGenre('electronic',this)">🎛️ Électro</button>
-      <button class="cat-genre-btn" onclick="catGenre('jazz',this)">🎷 Jazz</button>
-      <button class="cat-genre-btn" onclick="catGenre('reggae',this)">🌴 Reggae</button>
-      <button class="cat-genre-btn" onclick="catGenre('classical',this)">🎻 Classique</button>
-      <button class="cat-genre-btn" onclick="catGenre('rnb',this)">🎙️ R&B</button>
-      <button class="cat-genre-btn" onclick="catGenre('world',this)">🌐 World</button>
+      <button class="cat-genre-btn active" onclick="catGenre('',this)">🔥 Tendances</button>
+      <button class="cat-genre-btn" onclick="catGenre('afrobeats 2024',this)">🌍 Afro</button>
+      <button class="cat-genre-btn" onclick="catGenre('hip hop rap 2024',this)">🎤 Hip-Hop</button>
+      <button class="cat-genre-btn" onclick="catGenre('pop music 2024',this)">🎵 Pop</button>
+      <button class="cat-genre-btn" onclick="catGenre('rnb soul music',this)">🎙️ R&B</button>
+      <button class="cat-genre-btn" onclick="catGenre('amapiano 2024',this)">🇿🇦 Amapiano</button>
+      <button class="cat-genre-btn" onclick="catGenre('reggae dancehall',this)">🌴 Reggae</button>
+      <button class="cat-genre-btn" onclick="catGenre('electronic dance music',this)">🎛️ Électro</button>
+      <button class="cat-genre-btn" onclick="catGenre('gospel music 2024',this)">✝️ Gospel</button>
+      <button class="cat-genre-btn" onclick="catGenre('rock music 2024',this)">🎸 Rock</button>
+      <button class="cat-genre-btn" onclick="catGenre('world music africa',this)">🌐 World</button>
     </div>
 
     <!-- Section label -->
@@ -862,25 +862,6 @@ kbd{background:rgba(255,255,255,0.7);border:1.5px solid var(--border);padding:1p
     </button>
   </div>
 
-  <!-- Now Playing bar (catalogue) -->
-  <div class="cat-now-playing" id="catNowPlaying">
-    <div class="cat-np-art" id="catNpArt">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan-l)" stroke-width="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-    </div>
-    <div class="cat-np-info">
-      <div class="cat-np-title" id="catNpTitle">—</div>
-      <div class="cat-np-artist" id="catNpArtist">—</div>
-      <div class="cat-np-bar"><div class="cat-np-fill" id="catNpFill"></div></div>
-    </div>
-    <div class="cat-np-controls">
-      <button class="cat-np-btn" id="catNpPlayBtn" onclick="catNpToggle()">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="white"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-      </button>
-      <button class="cat-np-close" onclick="catNpClose()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
-    </div>
-  </div>
 
 </main>
   <div class="page" id="pagePlaylist">
@@ -1578,237 +1559,277 @@ function showMicPermissionCard(){document.getElementById('permCard').classList.a
 function openMicSettings(){const os=detectOs(),ua=navigator.userAgent.toLowerCase();if(os==='android'){const pkg=ua.includes('firefox')?'org.mozilla.firefox':ua.includes('samsung')?'com.sec.android.app.sbrowser':'com.android.chrome';const a=document.createElement('a');a.href=`intent://settings/application_details/#Intent;scheme=android-app;package=${pkg};end`;a.target='_blank';document.body.appendChild(a);a.click();document.body.removeChild(a);}else if(os==='ios'){window.location.href='app-settings:';}else{window.open(ua.includes('firefox')?'about:preferences#privacy':'https://support.google.com/chrome/answer/2693767?hl=fr','_blank');}}
 async function retryMic(){document.getElementById('permCard').classList.remove('show');errorMsg.classList.remove('show');try{const s=await navigator.mediaDevices.getUserMedia({audio:true});s.getTracks().forEach(t=>t.stop());setStatus('✅ Microphone autorisé !','active');statusBadge.innerHTML='<svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="#8adec9"/></svg> Prêt';setTimeout(()=>setStatus('Appuyez pour écouter'),2500);}catch{showMicPermissionCard();}}
 
-// ===== CATALOGUE AUDIOMACK =====
+// ===== CATALOGUE YOUTUBE =====
+// Clé YouTube Data API v3 — gratuite, 10 000 req/jour
+const YT_KEY = 'AIzaSyA0xkrCa69u4ta3ipTPzMVp625DWtWdnKQ';
+
 let catLoaded   = false;
-let catPage     = 0;
 let catQuery    = '';
-let catGenreTag = '';
-let catResults  = [];
+let catToken    = '';   // pageToken pour pagination
+let catItems    = [];
 let catSavedIds = new Set(JSON.parse(localStorage.getItem('soniq_cat_saved')||'[]'));
 
-// Curated playlists Audiomack par genre (artiste/slug connus)
-const CAT_GENRES = {
-  '':        { label:'🔥 Tendances',   seeds:['burnaboy/african-giant','wizkid/essence','davido/a-better-time','ckay/love-nwantiti','omah-lay/boy-alone','fireboy-dml/playboy','rema/calm-down','asake/mr-money','kizz-daniel/buga','ayra-starr/19-and-dangerous','olamide/ux-man','flavour/chollywood'] },
-  'afro':    { label:'🌍 Afrobeats',   seeds:['burnaboy/twice-as-tall','wizkid/made-in-lagos','davido/timeless','ckay/ckay-the-first','omah-lay/what-have-we-done','fireboy-dml/apollo','rema/rave-and-roses','asake/ololade','kizz-daniel/kizz-daniel-ep','tems/if-orange-was-a-place','pheelz/hear-me-out','joeboy/somewhere-between-beauty-and-magic'] },
-  'hiphop':  { label:'🎤 Hip-Hop',     seeds:['drake/certified-lover-boy','kendrick-lamar/mr-morale-the-big-steppers','j-cole/the-off-season','travis-scott/astroworld','lil-baby/the-voice-of-the-heroes','roddy-ricch/please-excuse-me-for-being-antisocial','polo-g/hall-of-fame','nba-youngboy/sincerely-kentrell','21-savage/slaughter-king','gunna/wunna'] },
-  'pop':     { label:'🎵 Pop',         seeds:['the-weeknd/after-hours','doja-cat/planet-her','olivia-rodrigo/sour','billie-eilish/happier-than-ever','ariana-grande/positions','harry-styles/fine-line','dua-lipa/future-nostalgia','selena-gomez/rare','post-malone/hollywoods-bleeding','shawn-mendes/wonder'] },
-  'rnb':     { label:'🎙️ R&B',         seeds:['sza/sos','summer-walker/still-over-it','h-e-r/back-of-my-mind','giveon/take-time','lucky-daye/painted','brent-faiyaz/wasteland','daniel-caesar/case-study-01','lion-babe/cosmic-wind','khalid/free-spirit','jhene-aiko/chilombo'] },
-  'amapiano':{ label:'🇿🇦 Amapiano',   seeds:['kabza-de-small/i-am-the-king-of-amapiano','dj-maphorisa/sikhokelo','young-stunna/notumato','focalistic/ke-star','mas-musiq/piano-city','josiah-de-disciple/healing','major-league-djz/synthesized-live','vigro-deep/baby-boy','mr-jazziq/young-grooves','themba-seete/amapiano-mix'] },
-  'reggae':  { label:'🌴 Reggae',      seeds:['chronixx/chronology','protoje/a-matter-of-time','koffee/rapture','sizzla/da-real-thing','popcaan/forever','alkaline/year-long','busy-signal/the-maestro','jah-cure/the-cure','tarrus-riley/healing','etana/better-tomorrow'] },
-  'drill':   { label:'🔊 Drill',       seeds:['central-cee/wild-west','pop-smoke/shoot-for-the-stars','fivio-foreign/800-bc','sheff-g/the-unluccy-luccy-kid','sleepy-hallow/still-sleepy','smoove-l/drill-n-b','lil-tjay/destined-2-win','bizzy-banks/in-due-time'] },
-  'gospel':  { label:'✝️ Gospel',      seeds:['tasha-cobbs-leonard/royalty','maverick-city-music/old-church-basement','cece-winans/believe-for-it','kirk-franklin/just-for-me','tye-tribbett/the-battle-is-the-lords','jekalyn-carr/you-will-win','jonathan-mcreynolds/nature','koryn-hawthorne/unstoppable'] },
-  'world':   { label:'🌐 World',       seeds:['ozuna/nibiru','j-balvin/colores','maluma/7-dias-en-jamaica','rauw-alejandro/vice-versa','bad-bunny/un-verano-sin-ti','karol-g/mañana-sera-bonito','shakira/laslaslas','anuel-aa/emmanuel'] },
+// Requêtes par défaut par genre (trending music queries)
+const CAT_DEFAULTS = {
+  '':                    'top hits music 2024 official audio',
+  'afrobeats 2024':      'afrobeats 2024 official audio',
+  'hip hop rap 2024':    'hip hop rap 2024 official audio',
+  'pop music 2024':      'pop music 2024 official audio',
+  'rnb soul music':      'rnb soul 2024 official audio',
+  'amapiano 2024':       'amapiano 2024 official audio',
+  'reggae dancehall':    'reggae dancehall 2024 official audio',
+  'electronic dance music':'electronic dance music 2024',
+  'gospel music 2024':   'gospel music 2024 official audio',
+  'rock music 2024':     'rock music 2024 official audio',
+  'world music africa':  'world music africa 2024 official audio',
 };
 
-function catInit() {
-  catLoaded   = true;
-  catPage     = 0;
-  catQuery    = '';
-  catGenreTag = '';
-  catRenderSeeds(CAT_GENRES[''].seeds, '🔥 Tendances');
+async function catInit() {
+  catLoaded = true;
+  catQuery  = 'top hits music 2024 official audio';
+  catToken  = '';
+  catItems  = [];
+  await catFetchYT(false);
 }
 
 function catSearch() {
   const q = document.getElementById('catSearchInput').value.trim();
   if (!q) return;
-  catQuery    = q;
-  catGenreTag = '';
-  catPage     = 0;
+  catQuery = q + ' official audio';
+  catToken = '';
+  catItems = [];
   document.querySelectorAll('.cat-genre-btn').forEach(b=>b.classList.remove('active'));
   document.querySelector('.cat-genre-btn').classList.add('active');
   document.getElementById('catSectionLabel').textContent = `🔍 "${q}"`;
-  document.getElementById('catResultCount').textContent  = '';
-  catRenderSearch(q);
+  catFetchYT(false);
 }
 
 function catGenre(tag, btn) {
-  catGenreTag = tag;
-  catQuery    = '';
-  catPage     = 0;
+  catQuery = CAT_DEFAULTS[tag] || tag + ' official audio';
+  catToken = '';
+  catItems = [];
   document.getElementById('catSearchInput').value = '';
   document.querySelectorAll('.cat-genre-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
-  const g = CAT_GENRES[tag] || CAT_GENRES[''];
-  document.getElementById('catSectionLabel').textContent = g.label;
-  document.getElementById('catResultCount').textContent  = '';
-  catRenderSeeds(g.seeds, g.label);
+  const labels = {'':'🔥 Tendances','afrobeats 2024':'🌍 Afrobeats','hip hop rap 2024':'🎤 Hip-Hop','pop music 2024':'🎵 Pop','rnb soul music':'🎙️ R&B','amapiano 2024':'🇿🇦 Amapiano','reggae dancehall':'🌴 Reggae','electronic dance music':'🎛️ Électro','gospel music 2024':'✝️ Gospel','rock music 2024':'🎸 Rock','world music africa':'🌐 World'};
+  document.getElementById('catSectionLabel').textContent = labels[tag] || tag;
+  catFetchYT(false);
 }
 
-// Render seed cards (artiste/slug Audiomack connus)
-function catRenderSeeds(seeds, label) {
+async function catFetchYT(append) {
   const container = document.getElementById('catContainer');
-  document.getElementById('catLoadMore').style.display = 'none';
-  container.innerHTML = '';
-  const list = document.createElement('div');
-  list.className = 'cat-list';
-  seeds.forEach((seed, i) => {
-    const [artist, slug] = seed.split('/');
-    const artistName = artist.replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
-    const songName   = slug.replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
-    const embedUrl   = `https://audiomack.com/embed/song/${artist}/${slug}`;
+  const loadMore  = document.getElementById('catLoadMore');
+  if (!append) {
+    container.innerHTML = `<div class="cat-loading"><div class="cat-spinner"></div><span>Recherche en cours…</span></div>`;
+    loadMore.style.display = 'none';
+  }
+  // Si pas de clé API valide → mode démo avec seeds YouTube hardcodés
+  if (!YT_KEY || YT_KEY.includes('placeholder')) {
+    catRenderDemo(catQuery, append);
+    return;
+  }
+  try {
+    let url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&maxResults=20&q=${encodeURIComponent(catQuery)}&key=${YT_KEY}`;
+    if (catToken) url += `&pageToken=${catToken}`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error('YT API ' + resp.status);
+    const data  = await resp.json();
+    catToken    = data.nextPageToken || '';
+    const items = (data.items||[]).map(it => ({
+      videoId:   it.id.videoId,
+      title:     it.snippet.title,
+      artist:    it.snippet.channelTitle.replace(' - Topic','').replace('VEVO',''),
+      thumb:     it.snippet.thumbnails?.medium?.url || it.snippet.thumbnails?.default?.url,
+      published: it.snippet.publishedAt?.slice(0,4),
+    }));
+    if (!append) { catItems = items; container.innerHTML = ''; }
+    else catItems = catItems.concat(items);
+    catRenderItems(items, append);
+    loadMore.style.display = catToken ? 'block' : 'none';
+    document.getElementById('catResultCount').textContent = catItems.length + ' titres';
+  } catch(e) {
+    console.warn('YT API error:', e);
+    catRenderDemo(catQuery, append);
+  }
+}
+
+async function catLoadMore() { await catFetchYT(true); }
+
+// Mode démo : seeds hardcodés par genre avec vrais IDs YouTube
+const YT_SEEDS = {
+  default: [
+    {videoId:'kGx4zhEMYNk',title:'Blinding Lights',        artist:'The Weeknd',      thumb:'https://i.ytimg.com/vi/kGx4zhEMYNk/mqdefault.jpg'},
+    {videoId:'SlPhMPnQ58k',title:'As It Was',               artist:'Harry Styles',    thumb:'https://i.ytimg.com/vi/SlPhMPnQ58k/mqdefault.jpg'},
+    {videoId:'UceaB4D0jpo',title:'Calm Down',               artist:'Rema & Selena',   thumb:'https://i.ytimg.com/vi/UceaB4D0jpo/mqdefault.jpg'},
+    {videoId:'UrH9C7Oj4Tk',title:'Essence',                 artist:'Wizkid ft Tems',  thumb:'https://i.ytimg.com/vi/UrH9C7Oj4Tk/mqdefault.jpg'},
+    {videoId:'jvUqMsVhaoM',title:'Love Nwantiti',           artist:'CKay',            thumb:'https://i.ytimg.com/vi/jvUqMsVhaoM/mqdefault.jpg'},
+    {videoId:'5ala0pGGjEA',title:'Buga',                    artist:'Kizz Daniel',     thumb:'https://i.ytimg.com/vi/5ala0pGGjEA/mqdefault.jpg'},
+    {videoId:'04854XqcfBY',title:'Last Last',               artist:'Burna Boy',       thumb:'https://i.ytimg.com/vi/04854XqcfBY/mqdefault.jpg'},
+    {videoId:'RIX3wy0I30U',title:'Mr Money',                artist:'Asake',           thumb:'https://i.ytimg.com/vi/RIX3wy0I30U/mqdefault.jpg'},
+    {videoId:'YkgkThdzX-8',title:'Flowers',                 artist:'Miley Cyrus',     thumb:'https://i.ytimg.com/vi/YkgkThdzX-8/mqdefault.jpg'},
+    {videoId:'WDdcGkDxhb4',title:'Kill Bill',               artist:'SZA',             thumb:'https://i.ytimg.com/vi/WDdcGkDxhb4/mqdefault.jpg'},
+    {videoId:'jq9m0eiSqeA',title:'Creepin',                 artist:'Metro Boomin',    thumb:'https://i.ytimg.com/vi/jq9m0eiSqeA/mqdefault.jpg'},
+    {videoId:'H5v3kku4y6Q',title:'Unholy',                  artist:'Sam Smith',       thumb:'https://i.ytimg.com/vi/H5v3kku4y6Q/mqdefault.jpg'},
+    {videoId:'JneyK22C6KY',title:'Rich Flex',               artist:'Drake & 21 Savage',thumb:'https://i.ytimg.com/vi/JneyK22C6KY/mqdefault.jpg'},
+    {videoId:'Wqy3PBEglXQ',title:'Bloody Samaritan',        artist:'Ayra Starr',      thumb:'https://i.ytimg.com/vi/Wqy3PBEglXQ/mqdefault.jpg'},
+    {videoId:'UTHLKHL_wZE',title:'Peru',                    artist:'Fireboy DML',     thumb:'https://i.ytimg.com/vi/UTHLKHL_wZE/mqdefault.jpg'},
+    {videoId:'F-Z4_oy6oJ0',title:'Ojuelegba',               artist:'Wizkid',          thumb:'https://i.ytimg.com/vi/F-Z4_oy6oJ0/mqdefault.jpg'},
+  ],
+  'afrobeats 2024': [
+    {videoId:'04854XqcfBY',title:'Last Last',         artist:'Burna Boy',      thumb:'https://i.ytimg.com/vi/04854XqcfBY/mqdefault.jpg'},
+    {videoId:'UrH9C7Oj4Tk',title:'Essence',           artist:'Wizkid',         thumb:'https://i.ytimg.com/vi/UrH9C7Oj4Tk/mqdefault.jpg'},
+    {videoId:'UceaB4D0jpo',title:'Calm Down',         artist:'Rema',           thumb:'https://i.ytimg.com/vi/UceaB4D0jpo/mqdefault.jpg'},
+    {videoId:'jvUqMsVhaoM',title:'Love Nwantiti',     artist:'CKay',           thumb:'https://i.ytimg.com/vi/jvUqMsVhaoM/mqdefault.jpg'},
+    {videoId:'5ala0pGGjEA',title:'Buga',              artist:'Kizz Daniel',    thumb:'https://i.ytimg.com/vi/5ala0pGGjEA/mqdefault.jpg'},
+    {videoId:'Wqy3PBEglXQ',title:'Bloody Samaritan',  artist:'Ayra Starr',     thumb:'https://i.ytimg.com/vi/Wqy3PBEglXQ/mqdefault.jpg'},
+    {videoId:'UTHLKHL_wZE',title:'Peru',              artist:'Fireboy DML',    thumb:'https://i.ytimg.com/vi/UTHLKHL_wZE/mqdefault.jpg'},
+    {videoId:'RIX3wy0I30U',title:'Mr Money',          artist:'Asake',          thumb:'https://i.ytimg.com/vi/RIX3wy0I30U/mqdefault.jpg'},
+    {videoId:'F-Z4_oy6oJ0',title:'Ojuelegba',         artist:'Wizkid',         thumb:'https://i.ytimg.com/vi/F-Z4_oy6oJ0/mqdefault.jpg'},
+    {videoId:'8Rg_FkDFNd4',title:'Bank On It',        artist:'Burna Boy',      thumb:'https://i.ytimg.com/vi/8Rg_FkDFNd4/mqdefault.jpg'},
+  ],
+  'hip hop rap 2024': [
+    {videoId:'JneyK22C6KY',title:'Rich Flex',         artist:'Drake & 21 Savage',  thumb:'https://i.ytimg.com/vi/JneyK22C6KY/mqdefault.jpg'},
+    {videoId:'X7HWwx1lMcg',title:'God Did',           artist:'DJ Khaled',          thumb:'https://i.ytimg.com/vi/X7HWwx1lMcg/mqdefault.jpg'},
+    {videoId:'jq9m0eiSqeA',title:'Creepin',           artist:'Metro Boomin',       thumb:'https://i.ytimg.com/vi/jq9m0eiSqeA/mqdefault.jpg'},
+    {videoId:'xvZqHgFz51I',title:'SICKO MODE',        artist:'Travis Scott',       thumb:'https://i.ytimg.com/vi/xvZqHgFz51I/mqdefault.jpg'},
+    {videoId:'RXnP3vDmrxA',title:'A Lot',             artist:'21 Savage',          thumb:'https://i.ytimg.com/vi/RXnP3vDmrxA/mqdefault.jpg'},
+    {videoId:'kPa4hDc4TBU',title:'Walk Em Down',      artist:'NLE Choppa',         thumb:'https://i.ytimg.com/vi/kPa4hDc4TBU/mqdefault.jpg'},
+    {videoId:'S-rB0pHI9fU',title:'Magnolia',          artist:'Playboi Carti',      thumb:'https://i.ytimg.com/vi/S-rB0pHI9fU/mqdefault.jpg'},
+    {videoId:'0jnB2Wrij_8',title:'Alright',           artist:'Kendrick Lamar',     thumb:'https://i.ytimg.com/vi/0jnB2Wrij_8/mqdefault.jpg'},
+  ],
+  'amapiano 2024': [
+    {videoId:'3I0hIHauJe0',title:'Ke Star',           artist:'Focalistic',         thumb:'https://i.ytimg.com/vi/3I0hIHauJe0/mqdefault.jpg'},
+    {videoId:'dQw4w9WgXcQ',title:'Stimela',           artist:'Kabza De Small',     thumb:'https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg'},
+    {videoId:'9kN3dOPbOJA',title:'Izikhothane',       artist:'Young Stunna',       thumb:'https://i.ytimg.com/vi/9kN3dOPbOJA/mqdefault.jpg'},
+  ],
+};
+
+function catRenderDemo(query, append) {
+  const container = document.getElementById('catContainer');
+  const loadMore  = document.getElementById('catLoadMore');
+  // Find best matching seed set
+  let items = YT_SEEDS[catQuery] || YT_SEEDS[Object.keys(YT_SEEDS).find(k=>catQuery.includes(k.split(' ')[0]))||''] || YT_SEEDS.default;
+  // Filter by search query if typed
+  const rawQ = document.getElementById('catSearchInput').value.trim().toLowerCase();
+  if (rawQ) items = items.filter(i=>i.title.toLowerCase().includes(rawQ)||i.artist.toLowerCase().includes(rawQ));
+  if (!items.length) items = YT_SEEDS.default.filter(i=>i.title.toLowerCase().includes(rawQ)||i.artist.toLowerCase().includes(rawQ));
+  if (!append) { catItems = items; container.innerHTML=''; }
+  catRenderItems(items, append);
+  loadMore.style.display = 'none';
+  document.getElementById('catResultCount').textContent = items.length + ' titres';
+  if (!YT_KEY || YT_KEY.includes('placeholder')) {
+    const info = document.createElement('div');
+    info.style.cssText = 'text-align:center;padding:0.8rem 1rem;font-size:0.7rem;color:var(--light);margin-top:0.5rem;line-height:1.6';
+    info.innerHTML = `<strong style="color:var(--cyan-d)">Mode démo</strong> · Ajoute ta clé <a href="https://console.cloud.google.com/" target="_blank" style="color:var(--cyan-d)">YouTube Data API v3</a> pour des résultats illimités`;
+    container.appendChild(info);
+  }
+}
+
+function catRenderItems(items, append) {
+  const container = document.getElementById('catContainer');
+  if (!append) container.innerHTML = '';
+  let list = container.querySelector('.cat-list');
+  if (!list) { list = document.createElement('div'); list.className = 'cat-list'; container.appendChild(list); }
+  items.forEach((item, i) => {
+    const isSaved = catSavedIds.has(item.videoId);
     const el = document.createElement('div');
     el.className = 'cat-item';
-    el.id = `cat-item-${i}`;
-    el.style.animationDelay = (i*0.04)+'s';
-    const isSaved = catSavedIds.has(seed);
+    el.id = 'cat-yt-' + item.videoId;
+    el.style.animationDelay = (i * 0.04) + 's';
     el.innerHTML = `
-      <div class="cat-art" style="background:linear-gradient(135deg,var(--cyan-ll),rgba(184,170,237,0.3));display:flex;align-items:center;justify-content:center;">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--cyan-d)" stroke-width="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      <div class="cat-art">
+        <img src="${item.thumb}" loading="lazy" style="width:100%;height:100%;object-fit:cover"
+          onerror="this.parentNode.innerHTML='<svg width=22 height=22 viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'var(--cyan-l)\\' stroke-width=\\'1.5\\'><path d=\\'M9 18V5l12-2v13\\'/><circle cx=\\'6\\' cy=\\'18\\' r=\\'3\\'/><circle cx=\\'18\\' cy=\\'16\\' r=\\'3\\'/></svg>'">
       </div>
       <div class="cat-info">
-        <div class="cat-title">${songName}</div>
-        <div class="cat-artist">${artistName}</div>
-        <div class="cat-tags"><span class="cat-tag">Audiomack</span><span class="cat-tag">Complet</span></div>
+        <div class="cat-title">${item.title}</div>
+        <div class="cat-artist">${item.artist}</div>
+        <div class="cat-tags">
+          <span class="cat-tag">
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="#ff0000"><rect width="24" height="24" rx="5"/><path d="M10 8l6 4-6 4V8z" fill="white"/></svg>
+            YouTube
+          </span>
+          ${item.published ? `<span class="cat-tag">${item.published}</span>` : ''}
+        </div>
       </div>
       <div class="cat-actions">
-        <button class="cat-save-btn ${isSaved?'saved':''}" onclick="catToggleSaveSeed('${seed}','${songName}','${artistName}',this)" title="Sauvegarder">
+        <button class="cat-save-btn ${isSaved?'saved':''}" onclick='catToggleSaveYT(${JSON.stringify(item)})' title="Sauvegarder">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="${isSaved?'var(--mint)':'none'}" stroke="${isSaved?'var(--mint)':'currentColor'}" stroke-width="2.2" stroke-linecap="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
         </button>
-        <button class="cat-play-btn" onclick="catOpenEmbed('${embedUrl}','${songName}','${artistName}')" title="Lire">
+        <button class="cat-play-btn" onclick='catPlayYT(${JSON.stringify(item)})' title="Lire">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg>
         </button>
       </div>`;
     list.appendChild(el);
   });
-  container.appendChild(list);
-  document.getElementById('catResultCount').textContent = seeds.length + ' titres';
 }
 
-// Recherche via Audiomack oEmbed
-function catRenderSearch(q) {
-  const container = document.getElementById('catContainer');
-  document.getElementById('catLoadMore').style.display = 'none';
-  container.innerHTML = `<div class="cat-loading"><div class="cat-spinner"></div><span>Recherche sur Audiomack…</span></div>`;
-  // On construit des seeds à partir du query
-  const slug   = q.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
-  const seeds  = [
-    `${slug}/${slug}`,
-    `${slug}/greatest-hits`,
-    `${slug}/best-of`,
-    `${slug}/new-songs`,
-  ];
-  setTimeout(() => {
-    container.innerHTML = `
-      <div class="cat-empty" style="padding:1.5rem">
-        <div style="font-size:2rem;margin-bottom:0.8rem">🔍</div>
-        <strong style="color:var(--text);font-size:0.9rem">Rechercher "${q}" sur Audiomack</strong>
-        <p style="margin-top:0.6rem;font-size:0.8rem;color:var(--muted);line-height:1.6">
-          Tape le lien exact d'une chanson Audiomack<br>ou colle-le ci-dessous pour la lire directement.
-        </p>
-        <div style="display:flex;gap:0.5rem;margin-top:1rem;flex-direction:column;align-items:stretch">
-          <input id="catDirectUrl" class="cat-search-input" style="padding:10px 14px;border-radius:12px;font-size:0.82rem;width:100%"
-            placeholder="https://audiomack.com/artiste/song-title"
-            value="https://audiomack.com/">
-          <button class="cat-search-btn" style="border-radius:12px;padding:10px" onclick="catOpenDirectUrl()">
-            ▶ Lire ce son
-          </button>
-        </div>
-        <div style="margin-top:1.2rem;font-size:0.72rem;color:var(--light)">
-          Ou choisissez un genre pour parcourir le catalogue ↑
-        </div>
-      </div>`;
-  }, 600);
-}
-
-function catOpenDirectUrl() {
-  const url = document.getElementById('catDirectUrl')?.value?.trim();
-  if (!url || !url.includes('audiomack.com')) return;
-  // Convert audiomack.com/artist/song → embed URL
-  const embedUrl = url.replace('audiomack.com/','audiomack.com/embed/song/').replace('/embed/song/embed/song/','embed/song/');
-  const parts    = url.split('audiomack.com/').pop().split('/');
-  const artist   = (parts[0]||'').replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
-  const song     = (parts[1]||'').replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
-  catOpenEmbed(embedUrl, song||url, artist||'Audiomack');
-}
-
-// ===== LECTEUR EMBED AUDIOMACK =====
-function catOpenEmbed(embedUrl, title, artist) {
-  // Ferme l'ancien
-  const existing = document.getElementById('catEmbedOverlay');
+// ===== PLAYER YOUTUBE PLEIN ÉCRAN =====
+function catPlayYT(item) {
+  const existing = document.getElementById('ytPlayerOverlay');
   if (existing) existing.remove();
 
   const overlay = document.createElement('div');
-  overlay.id = 'catEmbedOverlay';
+  overlay.id = 'ytPlayerOverlay';
   overlay.style.cssText = `
     position:fixed;inset:0;z-index:9000;
-    background:#0a1520;
+    background:#000;
     display:flex;flex-direction:column;
-    animation:fadeIn 0.25s ease;
+    animation:fadeIn 0.2s ease;
   `;
   overlay.innerHTML = `
-    <style>@keyframes fadeIn{from{opacity:0}to{opacity:1}}</style>
-    <!-- Header fixe -->
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:1rem 1.2rem;background:rgba(10,21,32,0.95);border-bottom:1px solid rgba(91,189,214,0.15);flex-shrink:0">
-      <div style="min-width:0;flex:1">
-        <div style="font-family:'Quicksand',sans-serif;font-size:1rem;font-weight:700;color:#c8e8f5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${title}</div>
-        <div style="font-size:0.72rem;color:#5a9ab8;font-weight:500;margin-top:2px">${artist} · Audiomack</div>
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:0.9rem 1.1rem;background:rgba(0,0,0,0.9);border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0;gap:0.8rem">
+      <img src="${item.thumb}" style="width:42px;height:42px;border-radius:8px;object-fit:cover;flex-shrink:0">
+      <div style="flex:1;min-width:0">
+        <div style="font-family:'Quicksand',sans-serif;font-size:0.95rem;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.title}</div>
+        <div style="font-size:0.7rem;color:#aaa;font-weight:500;margin-top:1px">${item.artist}</div>
       </div>
-      <button onclick="document.getElementById('catEmbedOverlay').remove()"
-        style="width:36px;height:36px;border-radius:50%;border:1.5px solid rgba(91,189,214,0.3);background:rgba(255,255,255,0.06);color:#c8e8f5;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-left:0.8rem;font-size:1.1rem;font-family:inherit">
+      <button onclick="document.getElementById('ytPlayerOverlay').remove()"
+        style="width:34px;height:34px;border-radius:50%;border:1.5px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.08);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:1rem;font-family:inherit">
         ✕
       </button>
     </div>
-    <!-- Iframe plein écran -->
+    <!-- YouTube iframe plein écran -->
     <iframe
-      src="${embedUrl}"
+      src="https://www.youtube.com/embed/${item.videoId}?autoplay=1&rel=0&modestbranding=1&playsinline=1"
       style="flex:1;width:100%;border:none;display:block"
-      allow="autoplay"
-      scrolling="no"
+      allow="autoplay; fullscreen; accelerometer; gyroscope; picture-in-picture"
+      allowfullscreen
       loading="lazy">
     </iframe>
-    <!-- Footer actions -->
-    <div style="display:flex;gap:0.6rem;padding:0.9rem 1.2rem;background:rgba(10,21,32,0.95);border-top:1px solid rgba(91,189,214,0.15);flex-shrink:0;justify-content:center">
-      <a href="${embedUrl.replace('/embed/song/','/')}" target="_blank"
-        style="display:inline-flex;align-items:center;gap:6px;padding:10px 18px;border-radius:100px;font-size:0.75rem;font-weight:700;text-decoration:none;border:1.5px solid rgba(91,189,214,0.3);color:#5bbdd6;background:rgba(91,189,214,0.08)">
+    <!-- Footer -->
+    <div style="display:flex;gap:0.6rem;padding:0.8rem 1rem;background:rgba(0,0,0,0.9);border-top:1px solid rgba(255,255,255,0.08);flex-shrink:0;justify-content:center;align-items:center">
+      <a href="https://youtube.com/watch?v=${item.videoId}" target="_blank"
+        style="display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:100px;font-size:0.73rem;font-weight:700;text-decoration:none;border:1.5px solid rgba(255,80,80,0.4);color:#ff6b6b;background:rgba(255,80,80,0.08)">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-        Ouvrir sur Audiomack
+        YouTube
       </a>
-      <button onclick="catSaveFromEmbed('${embedUrl}','${title}','${artist}')"
-        style="display:inline-flex;align-items:center;gap:6px;padding:10px 18px;border-radius:100px;font-size:0.75rem;font-weight:700;border:1.5px solid rgba(138,222,201,0.4);color:#8adec9;background:rgba(138,222,201,0.08);cursor:pointer;font-family:inherit">
+      <button onclick='catToggleSaveYT(${JSON.stringify(item).replace(/'/g,"\\'")}); this.innerHTML="✅ Sauvegardé"; this.style.color="var(--mint)"; this.style.borderColor="var(--mint)"'
+        style="display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:100px;font-size:0.73rem;font-weight:700;border:1.5px solid rgba(138,222,201,0.4);color:#8adec9;background:rgba(138,222,201,0.08);cursor:pointer;font-family:inherit">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-        Ajouter à la playlist
+        Playlist
       </button>
     </div>`;
+
   document.body.appendChild(overlay);
-  // Fermer en cliquant hors
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 }
 
-function catSaveFromEmbed(embedUrl, title, artist) {
-  const id = embedUrl;
-  if (catSavedIds.has(id)) return;
-  catSavedIds.add(id);
-  localStorage.setItem('soniq_cat_saved', JSON.stringify([...catSavedIds]));
-  const entry = {
-    id: Date.now(), catId: id,
-    title, artist, album:'',
-    artUrl: null,
-    previewUrl: null,
-    audioCached: false, audioDataUrl: null,
-    embedUrl,
-    addedAt: new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}),
-  };
-  playlist.unshift(entry);
-  savePlaylist();
-  updatePlBadge();
-  // Feedback
-  const btn = document.querySelector('#catEmbedOverlay button:last-child');
-  if (btn) { btn.textContent = '✅ Ajouté !'; btn.style.color = '#8adec9'; }
-}
-
-function catToggleSaveSeed(seed, title, artist, btn) {
-  const embedUrl = `https://audiomack.com/embed/song/${seed}`;
-  if (catSavedIds.has(seed)) {
-    catSavedIds.delete(seed);
-    playlist = playlist.filter(p => p.catId !== seed);
+function catToggleSaveYT(item) {
+  const id = item.videoId;
+  if (catSavedIds.has(id)) {
+    catSavedIds.delete(id);
+    playlist = playlist.filter(p => p.catId !== id);
   } else {
-    catSavedIds.add(seed);
+    catSavedIds.add(id);
     playlist.unshift({
-      id: Date.now(), catId: seed,
-      title, artist, album:'',
-      artUrl: null, previewUrl: null,
-      audioCached: false, audioDataUrl: null,
-      embedUrl,
+      id: Date.now(), catId: id,
+      title: item.title, artist: item.artist,
+      album: '', artUrl: item.thumb,
+      previewUrl: null, audioCached: false, audioDataUrl: null,
+      ytVideoId: id,
+      embedUrl: `https://www.youtube.com/embed/${id}?autoplay=1&rel=0&playsinline=1`,
       addedAt: new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}),
     });
     savePlaylist();
@@ -1817,13 +1838,18 @@ function catToggleSaveSeed(seed, title, artist, btn) {
   localStorage.setItem('soniq_cat_saved', JSON.stringify([...catSavedIds]));
   savePlaylist();
   updatePlBadge();
-  const saved = catSavedIds.has(seed);
-  btn.classList.toggle('saved', saved);
-  btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="${saved?'var(--mint)':'none'}" stroke="${saved?'var(--mint)':'currentColor'}" stroke-width="2.2" stroke-linecap="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>`;
+  // Refresh button in list
+  const btn = document.querySelector(`#cat-yt-${id} .cat-save-btn`);
+  if (btn) {
+    const saved = catSavedIds.has(id);
+    btn.classList.toggle('saved', saved);
+    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="${saved?'var(--mint)':'none'}" stroke="${saved?'var(--mint)':'currentColor'}" stroke-width="2.2" stroke-linecap="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>`;
+  }
 }
 
+function catNpClose() {}
 
-
+// ===== KEYBOARD =====
 document.addEventListener('keydown', e => {
   if (e.code==='Space'&&e.target.tagName!=='INPUT'&&currentMode==='mic') { e.preventDefault(); toggleListen(); }
 });
