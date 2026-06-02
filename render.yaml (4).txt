@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: soniq-server
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: ACR_HOST
+        value: identify-eu-west-1.acrcloud.com
+      - key: ACR_KEY
+        sync: false
+      - key: ACR_SECRET
+        sync: false
+      - key: YT_KEY
+        sync: false
+      - key: NODE_VERSION
+        value: 20

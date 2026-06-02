@@ -1,7 +1,7 @@
 {
   "name": "soniq-server",
-  "version": "1.0.0",
-  "description": "SONIQ API proxy server — DAVIESLAY studio",
+  "version": "2.0.0",
+  "description": "SONIQ API proxy — ACRCloud + YouTube · DAVIESLAY studio",
   "main": "server.js",
   "type": "module",
   "scripts": {

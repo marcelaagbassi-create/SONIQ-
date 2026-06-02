@@ -1,24 +1,30 @@
 // ============================================================
-//  SONIQ Server — API Proxy sécurisé
+//  SONIQ Server v2.0 — ACRCloud + YouTube proxy
 //  DAVIESLAY studio · Node.js + Express
 // ============================================================
 
 import 'dotenv/config';
-import express       from 'express';
-import cors          from 'cors';
-import fetch         from 'node-fetch';
-import FormData      from 'form-data';
-import rateLimit     from 'express-rate-limit';
+import express    from 'express';
+import cors       from 'cors';
+import fetch      from 'node-fetch';
+import crypto     from 'crypto';
+import FormData   from 'form-data';
+import rateLimit  from 'express-rate-limit';
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
-// ── Clés API (variables d'environnement uniquement) ──────────
-const AUDD_KEY = process.env.AUDD_KEY;
-const YT_KEY   = process.env.YT_KEY;
+// ── Clés (variables d'environnement uniquement) ──────────────
+const ACR_HOST   = process.env.ACR_HOST;   // ex: identify-eu-west-1.acrcloud.com
+const ACR_KEY    = process.env.ACR_KEY;
+const ACR_SECRET = process.env.ACR_SECRET;
+const YT_KEY     = process.env.YT_KEY;
 
-if (!AUDD_KEY || !YT_KEY) {
-  console.warn('⚠️  Variables d\'environnement manquantes : AUDD_KEY, YT_KEY');
+if (!ACR_HOST || !ACR_KEY || !ACR_SECRET) {
+  console.warn('⚠️  Variables ACRCloud manquantes : ACR_HOST, ACR_KEY, ACR_SECRET');
+}
+if (!YT_KEY) {
+  console.warn('⚠️  Variable YT_KEY manquante');
 }
 
 // ── CORS ─────────────────────────────────────────────────────
@@ -26,120 +32,143 @@ const ALLOWED_ORIGINS = [
   'https://marcelaagbassi-create.github.io',
   'http://localhost',
   'http://127.0.0.1',
-  'null', // fichiers locaux
+  'null',
 ];
 
 app.use(cors({
   origin: (origin, cb) => {
-    if (!origin || ALLOWED_ORIGINS.some(o => origin.startsWith(o))) {
-      cb(null, true);
-    } else {
-      cb(new Error('CORS: origine non autorisée — ' + origin));
-    }
+    if (!origin || ALLOWED_ORIGINS.some(o => origin.startsWith(o))) cb(null, true);
+    else cb(new Error('CORS bloqué : ' + origin));
   },
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type'],
 }));
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '15mb' }));
 
 // ── Rate limiting ─────────────────────────────────────────────
-const limiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 30,
+app.use('/api', rateLimit({
+  windowMs: 60 * 1000,
+  max: 40,
   message: { error: 'Trop de requêtes, réessayez dans une minute.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use('/api', limiter);
+}));
 
 // ── Health check ──────────────────────────────────────────────
 app.get('/', (req, res) => {
   res.json({
-    status: 'ok',
-    app:    'SONIQ Server',
-    by:     'DAVIESLAY studio',
-    routes: ['/api/recognize', '/api/youtube/search'],
+    status:  'ok',
+    app:     'SONIQ Server v2.0',
+    by:      'DAVIESLAY studio',
+    engine:  'ACRCloud',
+    routes:  ['/api/recognize', '/api/youtube/search'],
   });
 });
 
 // ============================================================
+//  Signature ACRCloud
+// ============================================================
+function buildAcrSignature(method, uri, timestamp) {
+  const str = [method, uri, ACR_KEY, 'audio', '1', timestamp].join('\n');
+  return crypto.createHmac('sha1', ACR_SECRET).update(str).digest('base64');
+}
+
+// ============================================================
 //  POST /api/recognize
-//  Proxy vers AudD — identification musicale
-//  Body: multipart/form-data avec champ "audio" (fichier)
+//  Reconnaissance musicale via ACRCloud
+//  Body JSON : { audioBase64: string, mimeType: string }
 // ============================================================
 app.post('/api/recognize', async (req, res) => {
   try {
-    // Lire le body brut (audio base64 ou multipart)
-    const contentType = req.headers['content-type'] || '';
+    const { audioBase64, mimeType = 'audio/webm' } = req.body;
+    if (!audioBase64) return res.status(400).json({ error: 'audioBase64 manquant' });
 
-    let auddForm;
+    const audioBuf   = Buffer.from(audioBase64, 'base64');
+    const timestamp  = Math.floor(Date.now() / 1000);
+    const endpoint   = '/v1/identify';
+    const signature  = buildAcrSignature('POST', endpoint, timestamp);
 
-    if (contentType.includes('application/json')) {
-      // Audio encodé en base64 dans le JSON
-      const { audioBase64, mimeType = 'audio/webm' } = req.body;
-      if (!audioBase64) return res.status(400).json({ error: 'audioBase64 manquant' });
-      const buf = Buffer.from(audioBase64, 'base64');
-      auddForm  = new FormData();
-      auddForm.append('file', buf, { filename: 'audio.webm', contentType: mimeType });
-      auddForm.append('return', 'apple_music,spotify,lyrics');
-      auddForm.append('api_token', AUDD_KEY);
-    } else {
-      // Multipart direct — on recrée le FormData avec la clé côté serveur
-      const chunks = [];
-      for await (const chunk of req) chunks.push(chunk);
-      const raw = Buffer.concat(chunks);
+    const form = new FormData();
+    form.append('sample',          audioBuf, { filename: 'audio.webm', contentType: mimeType });
+    form.append('sample_bytes',    String(audioBuf.length));
+    form.append('access_key',      ACR_KEY);
+    form.append('data_type',       'audio');
+    form.append('signature_version','1');
+    form.append('signature',       signature);
+    form.append('timestamp',       String(timestamp));
 
-      // Extraire le fichier audio du multipart entrant
-      const boundary = contentType.split('boundary=')[1];
-      if (!boundary) return res.status(400).json({ error: 'Boundary multipart manquant' });
-
-      const parts = raw.toString('binary').split('--' + boundary);
-      let audioBuffer = null, audioMime = 'audio/webm';
-
-      for (const part of parts) {
-        if (part.includes('name="file"') || part.includes('name="audio"')) {
-          const ctMatch = part.match(/Content-Type:\s*([^\r\n]+)/i);
-          if (ctMatch) audioMime = ctMatch[1].trim();
-          const bodyStart = part.indexOf('\r\n\r\n') + 4;
-          const bodyEnd   = part.lastIndexOf('\r\n');
-          if (bodyStart > 4 && bodyEnd > bodyStart) {
-            audioBuffer = Buffer.from(part.slice(bodyStart, bodyEnd), 'binary');
-          }
-        }
-      }
-
-      if (!audioBuffer) return res.status(400).json({ error: 'Fichier audio non trouvé dans la requête' });
-
-      auddForm = new FormData();
-      auddForm.append('file', audioBuffer, { filename: 'audio.webm', contentType: audioMime });
-      auddForm.append('return', 'apple_music,spotify,lyrics');
-      auddForm.append('api_token', AUDD_KEY);
-    }
-
-    const auddRes = await fetch('https://api.audd.io/', {
+    const acrRes = await fetch(`https://${ACR_HOST}${endpoint}`, {
       method:  'POST',
-      body:    auddForm,
-      headers: auddForm.getHeaders(),
+      body:    form,
+      headers: form.getHeaders(),
+      timeout: 15000,
     });
 
-    if (!auddRes.ok) {
-      return res.status(auddRes.status).json({ error: 'AudD HTTP ' + auddRes.status });
-    }
+    if (!acrRes.ok) throw new Error('ACRCloud HTTP ' + acrRes.status);
 
-    const data = await auddRes.json();
-    res.json(data);
+    const acrData = await acrRes.json();
+    console.log('[ACR] status:', acrData.status?.msg);
+
+    // Normaliser la réponse au format attendu par le frontend
+    const normalized = normalizeAcrResponse(acrData);
+    res.json(normalized);
 
   } catch (err) {
     console.error('[/api/recognize]', err.message);
-    res.status(500).json({ error: 'Erreur serveur : ' + err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 
 // ============================================================
+//  Normaliser la réponse ACRCloud → format SONIQ
+// ============================================================
+function normalizeAcrResponse(acr) {
+  const code = acr.status?.code;
+
+  // 0 = trouvé, 1001 = non trouvé
+  if (code !== 0) {
+    return {
+      status: 'error',
+      error: {
+        error_code:    code,
+        error_message: acr.status?.msg || 'Non reconnu',
+      },
+    };
+  }
+
+  const music = acr.metadata?.music?.[0];
+  if (!music) return { status: 'error', error: { error_code: 1001, error_message: 'Aucun résultat' } };
+
+  // Construire un objet compatible avec le frontend SONIQ
+  const result = {
+    title:        music.title        || '',
+    artist:       music.artists?.map(a => a.name).join(', ') || '',
+    album:        music.album?.name  || '',
+    release_date: music.release_date || '',
+    label:        music.label        || '',
+    timecode:     music.play_offset_ms
+                    ? `${Math.floor(music.play_offset_ms/60000)}:${String(Math.floor((music.play_offset_ms%60000)/1000)).padStart(2,'0')}`
+                    : null,
+    score:        music.score        || 0,
+    // Liens externes si disponibles
+    spotify:      music.external_metadata?.spotify
+                    ? {
+                        external_urls: { spotify: `https://open.spotify.com/track/${music.external_metadata.spotify.track?.id}` },
+                        album: { images: music.external_metadata.spotify.album?.id
+                          ? [{ url: `https://i.scdn.co/image/${music.external_metadata.spotify.album.id}` }]
+                          : [] },
+                        preview_url: null,
+                      }
+                    : null,
+    apple_music:  music.external_metadata?.apple_music || null,
+    deezer:       music.external_metadata?.deezer || null,
+    youtube:      music.external_metadata?.youtube || null,
+  };
+
+  return { status: 'success', result };
+}
+
+// ============================================================
 //  GET /api/youtube/search?q=...&pageToken=...
-//  Proxy vers YouTube Data API v3
 // ============================================================
 app.get('/api/youtube/search', async (req, res) => {
   try {
@@ -147,52 +176,40 @@ app.get('/api/youtube/search', async (req, res) => {
     if (!q) return res.status(400).json({ error: 'Paramètre q manquant' });
 
     let url = `https://www.googleapis.com/youtube/v3/search`
-            + `?part=snippet`
-            + `&type=video`
-            + `&videoCategoryId=10`
-            + `&maxResults=20`
-            + `&q=${encodeURIComponent(q)}`
-            + `&key=${YT_KEY}`;
-
+            + `?part=snippet&type=video&videoCategoryId=10&maxResults=20`
+            + `&q=${encodeURIComponent(q)}&key=${YT_KEY}`;
     if (pageToken) url += `&pageToken=${encodeURIComponent(pageToken)}`;
 
     const ytRes = await fetch(url);
-    if (!ytRes.ok) {
-      const err = await ytRes.text();
-      console.error('[/api/youtube/search] YT error:', err);
-      return res.status(ytRes.status).json({ error: 'YouTube API HTTP ' + ytRes.status });
-    }
+    if (!ytRes.ok) throw new Error('YouTube API HTTP ' + ytRes.status);
 
-    const data = await ytRes.json();
-    // On ne renvoie que ce dont le front a besoin (pas d'infos sensibles)
+    const data  = await ytRes.json();
+    if (data.error) throw new Error(data.error.message || 'YouTube API error');
+
     const items = (data.items || []).map(it => ({
       videoId:   it.id.videoId,
       title:     it.snippet.title,
-      artist:    it.snippet.channelTitle.replace(' - Topic', '').replace('VEVO', ''),
+      artist:    it.snippet.channelTitle.replace(/ - Topic$/,'').replace(/VEVO$/,'').trim(),
       thumb:     it.snippet.thumbnails?.medium?.url || it.snippet.thumbnails?.default?.url || '',
       published: it.snippet.publishedAt?.slice(0, 4) || '',
     }));
 
-    res.json({
-      items,
-      nextPageToken: data.nextPageToken || null,
-      totalResults:  data.pageInfo?.totalResults || 0,
-    });
+    res.json({ items, nextPageToken: data.nextPageToken || null });
 
   } catch (err) {
     console.error('[/api/youtube/search]', err.message);
-    res.status(500).json({ error: 'Erreur serveur : ' + err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 
 // ── 404 ───────────────────────────────────────────────────────
-app.use((req, res) => {
-  res.status(404).json({ error: 'Route inconnue' });
-});
+app.use((req, res) => res.status(404).json({ error: 'Route inconnue' }));
 
-// ── Démarrage ─────────────────────────────────────────────────
+// ── Start ─────────────────────────────────────────────────────
 app.listen(PORT, () => {
-  console.log(`✅ SONIQ Server démarré sur le port ${PORT}`);
-  console.log(`   AUDD_KEY : ${AUDD_KEY ? '✓ configurée' : '✗ manquante'}`);
-  console.log(`   YT_KEY   : ${YT_KEY   ? '✓ configurée' : '✗ manquante'}`);
+  console.log(`\n✅ SONIQ Server v2.0 démarré — port ${PORT}`);
+  console.log(`   ACR_HOST  : ${ACR_HOST  ? '✓ ' + ACR_HOST : '✗ manquant'}`);
+  console.log(`   ACR_KEY   : ${ACR_KEY   ? '✓ configurée' : '✗ manquante'}`);
+  console.log(`   ACR_SECRET: ${ACR_SECRET? '✓ configurée' : '✗ manquante'}`);
+  console.log(`   YT_KEY    : ${YT_KEY    ? '✓ configurée' : '✗ manquante'}\n`);
 });
