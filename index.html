@@ -739,18 +739,14 @@ kbd{background:rgba(255,255,255,0.7);border:1.5px solid var(--border);padding:1p
     <div class="api-secret" id="apiSecret">
       <div class="settings-section-label" style="margin-bottom:0.8rem">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--cyan-d)" stroke-width="2.2" stroke-linecap="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
-        Clé API AudD
+        Serveur · ACRCloud
       </div>
       <div class="glass setup-card">
         <div class="setup-desc">
-          AudD identifie la musique par empreinte audio réelle.
-          <a href="https://dashboard.audd.io/" target="_blank">Créez un compte gratuit →</a>
+          Reconnaissance musicale via <strong style="color:var(--cyan-d)">ACRCloud</strong> — 100 identifications/jour gratuites.
+          Serveur sécurisé : <a href="https://soniq-jqp3.onrender.com" target="_blank">soniq-jqp3.onrender.com</a>
         </div>
-        <div class="api-row">
-          <input class="api-input" type="password" id="apiKeyInput" placeholder="Votre clé API AudD…">
-          <button class="btn-save" onclick="saveApiKey()">Sauvegarder</button>
-        </div>
-        <div class="setup-status" id="setupStatus"></div>
+        <div class="setup-status ok" id="setupStatus">✓ ACRCloud actif — clés sécurisées côté serveur</div>
       </div>
     </div>
 
@@ -1067,7 +1063,7 @@ function showSetupStatus(msg, type) {
 
 // ===== INIT =====
 window.addEventListener('load', () => {
-  showSetupStatus('✓ Serveur sécurisé actif', 'ok');
+  showSetupStatus('✓ ACRCloud actif — clés sécurisées côté serveur', 'ok');
   try {
     soniqHistory = JSON.parse(localStorage.getItem('soniq_history') || '[]');
     // Validation
@@ -1220,12 +1216,18 @@ async function processAudio(blob) {
 }
 function handleAuddResult(data) {
   resetUploadZone();
-  if (data.status === 'error') {
+  // Support format ACRCloud (status: 'success'/'error') ET ancien format AudD
+  const isError = data.status === 'error' || (data.status && data.status !== 'success' && !data.result);
+  if (isError) {
     setStatus('Appuyez pour écouter');
-    statusBadge.innerHTML = '<svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="#fbc9a8"/></svg> Limite';
-    showError(data.error?.error_code === 901
-      ? '🔑 Limite atteinte. Allez dans Paramètres ⚙️ et entrez votre clé API AudD gratuite.'
-      : `❌ Erreur API : ${data.error?.error_message || 'Inconnue'}`);
+    statusBadge.innerHTML = '<svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="#b8aaed"/></svg> Non trouvé';
+    const code = data.error?.error_code;
+    const msg  = data.error?.error_message || '';
+    if (code === 1001 || msg.toLowerCase().includes('no result') || msg.toLowerCase().includes('non reconnu')) {
+      showError('🎵 Musique non reconnue. Rapprochez-vous de la source et réessayez !');
+    } else {
+      showError(`❌ ${msg || 'Erreur de reconnaissance. Réessayez.'}`);
+    }
     return;
   }
   if (!data.result) {
